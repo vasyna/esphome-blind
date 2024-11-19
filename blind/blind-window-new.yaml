@@ -1,0 +1,124 @@
+substitutions:
+  devicename: blind-window-new
+  upper_devicename: Automatic blinds with position memory
+  location: Не установлен.
+  hardware: ESP12E + A4988 + 28BYJ-48 12V
+  wifi_ip: 10.168.134.81
+  # wifi_ip: 10.168.134.9
+  #zerro_calibrate: "0.0"
+  #time_scan_termosensor: 15s # при отсутствии датчика ставим 4294967295ms (максиальный период сканирования)
+  #no_termosensor: 'false' # признак отсутствия термодатчика, если false, то ДАТЧИК ЕСТЬ !
+  #temperature_offset: "-15.0" # калибровка термодатчика
+  entity_name: blind-window-new    # такое же как device_name, но между словами использовать "_"
+  entity_friendly_name: blind-window-new    # такое же как device_name, возможны пробелы
+  device_class_cover: shade # класс устройства cover
+  ldr_pin: A0
+
+# wifi:
+#   use_address: $wifi_ip
+
+# <<: !include _blind_esp12e_pattern.yaml
+<<: !include _general_settings.yaml
+
+ota:
+  platform: esphome
+  password: !secret ota_pass
+
+esp8266:
+  board: esp01_1m
+  #board: esp12e
+  restore_from_flash: true
+
+cover:
+  - platform: stepper_cover
+    id: my_cover
+    name: "${entity_friendly_name} Cover"
+    stepper: my_stepper # шаговик, которым управляем
+    max_position: 33000 # "длина" шторы в шагах
+    update_delay: 300ms # задержка между публикациями состояния до дефолту (меняется number-ом "Update Delay"; см.ниже)
+
+stepper:
+  - platform: a4988
+    id: my_stepper
+    step_pin: 12
+    dir_pin:
+      number: 14
+      inverted: true
+    sleep_pin: 13
+    max_speed: 650 steps/s
+    # acceleration: 500
+    # deceleration: 500
+    acceleration: 250
+    deceleration: 250
+
+number:
+  - platform: template
+    # изменение скорости шаговика
+    name: "${entity_friendly_name} Speed Stepper"
+    optimistic: true
+    entity_category: config
+    mode: box
+    min_value: 100
+    max_value: 700
+    icon: mdi:cog-transfer
+    unit_of_measurement: steps/s
+    initial_value: 300
+    restore_value: true
+    step: 1
+    on_value:
+      then:
+        - lambda: 'id(my_cover).set_speed((int)x);'
+  - platform: template
+    # изменение задержки между публикациями состояния
+    name: "${entity_friendly_name} Update Delay"
+    optimistic: true
+    entity_category: config
+    mode: box
+    min_value: 100
+    max_value: 10000
+    icon: mdi:clock-end
+    unit_of_measurement: ms
+    initial_value: 500
+    restore_value: true
+    step: 1
+    on_value:
+      then:
+        - lambda: 'id(my_cover).set_update_delay((uint32_t)x);'
+
+button:
+  - platform: restart
+    name: "${entity_friendly_name} Restart"
+    entity_category: diagnostic
+
+external_components:
+  - source: github://dvb6666/esphome-components
+
+
+i2c:
+  sda: GPIO4
+  scl: GPIO5
+  scan: true
+  id: bus_a
+
+sensor:
+  - platform: bh1750
+    id: light_sensor
+    name: "${entity_friendly_name} Illuminance"
+    address: 0x23
+    update_interval: 60s
+
+# sensor:
+#   - platform: adc
+#     id: light_sensor
+#     name: "${entity_friendly_name} Illuminance"
+#     pin: $ldr_pin
+#     update_interval: 60s
+#     # attenuation: auto
+#     unit_of_measurement: lx
+#     device_class: illuminance
+#     accuracy_decimals: 2
+#     filters:
+#     # #             # return (x / 10000.0) * 2000000.0 - 15 ;
+#     # #             # return (x * 100);
+#       - lambda: |-
+#           return (x * 100);
